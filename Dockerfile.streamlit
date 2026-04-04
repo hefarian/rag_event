@@ -1,0 +1,37 @@
+# Dockerfile pour l'interface Streamlit Puls-Events RAG
+# Image de base: Python 3.11
+FROM python:3.11-slim
+
+# Définir le répertoire de travail
+WORKDIR /app
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier les requirements et installer les dépendances Python
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir streamlit requests
+
+# Copier l'application Streamlit
+COPY streamlit_app.py .
+
+# Créer le répertoire de config Streamlit
+RUN mkdir -p ~/.streamlit
+
+# Créer le fichier de configuration Streamlit
+RUN echo "[client]\nshowErrorDetails = false\n[logger]\nlevel = info\n[server]\nport = 8501\nheadless = true" > ~/.streamlit/config.toml
+
+# Exposer le port 8501 pour Streamlit
+EXPOSE 8501
+
+# Health check (Streamlit répond sur le port 8501)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8501/healthz || exit 1
+
+# Commande de démarrage
+CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]

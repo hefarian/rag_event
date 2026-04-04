@@ -1,0 +1,57 @@
+# Archives & test files (ignored from git)
+archive/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dataset files (large)
+*.parquet
+DATAIN/evenements-publics-openagenda.json
+DATAIN/*.docx
+DATAIN/*.doc
+DATAIN/*.xlsx
+
+# Vector files (large)
+vectors/index.faiss
+vectors/metadata.jsonl
+
+# Environment
+.env
+.env.local
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+docker-compose.override.yml
