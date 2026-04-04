@@ -35,6 +35,7 @@ var/
 # Dataset files (large)
 *.parquet
 DATAIN/evenements-publics-openagenda.json
+DATAIN/*.json
 DATAIN/*.docx
 DATAIN/*.doc
 DATAIN/*.xlsx
