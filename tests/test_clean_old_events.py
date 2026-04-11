@@ -12,7 +12,7 @@ print("TEST : Import du module clean_old_events")
 print("=" * 70)
 
 try:
-    from scripts.clean_old_events import (
+    from scripts.clean_index_robust import (
         parse_date,
         load_metadata,
         load_index,
