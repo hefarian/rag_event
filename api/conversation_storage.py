@@ -9,8 +9,20 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-CONVERSATIONS_DIR = Path("/app/data/conversations")
-CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
+# Use relative path that works both in Docker and CI
+# In Docker: /app/data/conversations is volume-mounted
+# In CI/local: data/conversations is created locally
+CONVERSATIONS_DIR = Path(os.environ.get("CONVERSATIONS_DIR", "data/conversations"))
+
+def _ensure_conversations_dir():
+    """Crée le répertoire de conversations s'il n'existe pas."""
+    try:
+        CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, FileNotFoundError) as e:
+        logger.warning(f"Could not create conversations directory: {e}")
+        # Continue anyway, it might exist or be handled by Docker
+
+_ensure_conversations_dir()
 
 def generate_conversation_id() -> str:
     """Génère un ID unique pour une nouvelle conversation"""
@@ -27,6 +39,7 @@ def create_conversation(initial_message: str = "") -> str:
     Returns:
         L'ID de la conversation
     """
+    _ensure_conversations_dir()
     conversation_id = generate_conversation_id()
     
     conversation = {
