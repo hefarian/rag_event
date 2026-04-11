@@ -91,42 +91,80 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# UTILITAIRES
+# UTILITAIRES (Fonctions helper pour communiquer avec l'API)
 # ============================================================================
+# Ces fonctions font le "glue" entre Streamlit (interface) et FastAPI (backend)
+# Elles envoient des requêtes HTTP et gèrent les erreurs
 
 @st.cache_resource
 def get_session_state():
-    """Initialise l'état de session."""
+    """Initialise l'état de session.
+    
+    @st.cache_resource = Cache le résultat. Si on récharge la page,
+    Streamlit ne recalcule pas cette fonction, elle retourne la valeur en cache.
+    """
     return st.session_state
 
 def check_api_health() -> bool:
-    """Vérifie que l'API est accessible."""
+    """Vérifie que l'API est accessible.
+    
+    POURQUOI?
+    Avant de poser une question, s'assurer que le serveur FastAPI répond
+    
+    RETOUR:
+    - True si API répond avec code 200
+    - False si erreur connexion/timeout
+    """
     try:
+        # Envoyer une requête GET /health à l'API
         response = requests.get(f"{API_BASE_URL}/health", timeout=2)
+        # Code 200 = OK
         return response.status_code == 200
     except Exception as e:
         st.error(f"⚠️ Erreur de connexion à l'API: {e}")
         return False
 
 def ask_question(question: str, top_k: int = 3) -> Optional[dict]:
-    """Envoie une question à l'API RAG."""
+    """Envoie une question à l'API RAG et récupère la réponse.
+    
+    ÉTAPES:
+    1. Prendre la question "Concerts à Paris?"
+    2. Envoyer POST /ask à FastAPI
+    3. API cherche dans FAISS + appelle Mistral
+    4. Retourner la réponse {'answer': '...', 'sources': [...]}
+    
+    ARGS:
+    - question: Texte de la question
+    - top_k: Nombre de sources à retourner (défaut 3)
+    
+    RETOUR:
+    - dict avec 'answer' et 'sources' si succès
+    - None si erreur
+    """
     try:
+        # Préparer la requête HTTP
         response = requests.post(
             f"{API_BASE_URL}/ask",
+            # Envoy json: {"question": "...", "top_k": 3}
             json={"question": question, "top_k": top_k},
+            # Attendre max 30 secondes pour la réponse
             timeout=30
         )
         
         if response.status_code == 200:
+            # Succès! Retourner la réponse JSON
             return response.json()
         else:
+            # Erreur API (ex: 400 = question invalide, 500 = crash serveur)
             st.error(f"Erreur API: {response.status_code} - {response.text}")
             return None
     
     except requests.exceptions.Timeout:
+        # Dépass de délai (> 30 sec) = requête trop longue
         st.error("⏱️ Délai d'attente dépassé. Veuillez réessayer.")
         return None
     except requests.exceptions.ConnectionError:
+        # Impossible de se connecter = serveur pas démarré
         st.error("🔌 Impossible de se connecter à l'API. Vérifiez que le service est en cours d'exécution.")
         return None
     except Exception as e:
@@ -134,7 +172,15 @@ def ask_question(question: str, top_k: int = 3) -> Optional[dict]:
         return None
 
 def search_documents(query: str, top_k: int = 5) -> Optional[list]:
-    """Effectue une recherche de similarité."""
+    """Effectue une recherche de similarité simple.
+    
+    DIFFÉRENCE AVEC ask_question:
+    - ask_question: /ask = Require FAISS + LLM (Mistral)
+    - search_documents: /search = Juste FAISS (no LLM)
+    
+    USAGE:
+    Quand on veut juste voir les événements similaires sans réponse textuelle
+    """
     try:
         response = requests.post(
             f"{API_BASE_URL}/search",
@@ -153,10 +199,19 @@ def search_documents(query: str, top_k: int = 5) -> Optional[list]:
         return None
 
 def clean_html(text: str) -> str:
-    """Convertit les balises HTML en Markdown lisible pour Streamlit."""
+    """Convertit les balises HTML en Markdown lisible pour Streamlit.
+    
+    POURQUOI?
+    OpenAgenda retourne des descriptions en HTML:
+    <p>Concert musical</p> → Pas beau dans Streamlit
+    
+    SOLUTION:
+    Convertir en Markdown:
+    <p>Concert musical</p> → Concert musical (plus beau!)
+    """
     if not text:
         return ""
-    # Remplacer les balises HTML par du Markdown
+    # Remplacer les balises HTML par du Markdown équivalent
     text = text.replace("<h3>", "### ").replace("</h3>", "")
     text = text.replace("<h4>", "#### ").replace("</h4>", "")
     text = text.replace("<h5>", "##### ").replace("</h5>", "")
@@ -169,16 +224,32 @@ def clean_html(text: str) -> str:
     return text.strip()
 
 def rebuild_index():
-    """Lance la reconstruction de l'index FAISS."""
+    """Lance la reconstruction de l'index FAISS via l'API.
+    
+    CÀ SERT À QUOI?
+    - Charger les nouvelles données OpenAgenda
+    - Recréer l'index FAISS depuis zéro
+    - Utile si les données OpenAgenda changent
+    
+    ÉTAPES:
+    1. Envoyer POST /rebuild à l'API
+    2. API appelle scripts/build_index.py
+    3. Index est recréé
+    4. Retourner le statut
+    """
     try:
+        # Afficher un spinner pendant que l'index se reconstruit
         with st.spinner("📊 Lancement de la reconstruction..."):
+            # Envoyer la requête, attendre max 10 secondes
             response = requests.post(f"{API_BASE_URL}/rebuild", timeout=10)
             
             if response.status_code == 200:
+                # Succès!
                 data = response.json()
                 st.success(f"✅ {data.get('message', 'Reconstruction lancée')}")
                 return True
             else:
+                # Erreur (ex: 500 = index construction failed)
                 st.error(f"Erreur: {response.status_code}")
                 return False
     
@@ -189,32 +260,37 @@ def rebuild_index():
 # ============================================================================
 # EN-TÊTE & NAVIGATION
 # ============================================================================
+# Afficher le titre et créer les onglets de navigation
 
 st.markdown("<h1 class='main-title'>🎭 Puls-Events RAG Interface</h1>", unsafe_allow_html=True)
 
-# Vérifier la connexion à l'API
+# Vérifier que l'API FastAPI est accessible
 api_ok = check_api_health()
 if api_ok:
     st.success("✅ API opérationnelle")
 else:
     st.warning("⚠️ API non accessible - certaines fonctionnalités peuvent être indisponibles")
 
-# Barre de navigation
+# Créer 5 onglets pour les différentes fonctionnalités
+# Les utilisateurs peuvent cliquer sur chaque onglet pour changer de vue
 tab_qna, tab_chatbot, tab_search, tab_admin, tab_docs = st.tabs(
     ["💬 Q&A RAG", "🤖 Chatbot Conversationnel", "🔍 Recherche", "⚙️ Administration", "📚 Documentation"]
 )
 
 # ============================================================================
-# ONGLET 1 : Q&A RAG
+# ONGLET 1 : Q&A RAG (Requêtes Une-off)
 # ============================================================================
+# Poser UNE question, obtenir UNE réponse (pas d'historique)
 
 with tab_qna:
     st.header("Chat RAG - Posez vos questions")
     st.write("Posez une question sur les événements OpenAgenda et recevez une réponse générée par Mistral.")
     
+    # Layout: 80% pour la question, 20% pour le bouton
     col1, col2 = st.columns([4, 1])
     
     with col1:
+        # Input text pour poser la question
         question = st.text_input(
             "Question",
             placeholder="Ex: Quels concerts jazz à Paris cette semaine ?",
