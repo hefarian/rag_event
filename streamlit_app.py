@@ -30,6 +30,12 @@ st.set_page_config(
 # URL de l'API (défaut pour Docker: http://api:8000)
 API_BASE_URL = "http://api:8000"
 
+# Initialisation session state
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = None
+if "conversation_messages" not in st.session_state:
+    st.session_state.conversation_messages = []
+
 # ============================================================================
 # STYLES CSS
 # ============================================================================
@@ -194,15 +200,15 @@ else:
     st.warning("⚠️ API non accessible - certaines fonctionnalités peuvent être indisponibles")
 
 # Barre de navigation
-tab_chat, tab_search, tab_admin, tab_docs = st.tabs(
-    ["💬 Chat RAG", "🔍 Recherche", "⚙️ Administration", "📚 Documentation"]
+tab_qna, tab_chatbot, tab_search, tab_admin, tab_docs = st.tabs(
+    ["💬 Q&A RAG", "🤖 Chatbot Conversationnel", "🔍 Recherche", "⚙️ Administration", "📚 Documentation"]
 )
 
 # ============================================================================
-# ONGLET 1 : CHAT RAG
+# ONGLET 1 : Q&A RAG
 # ============================================================================
 
-with tab_chat:
+with tab_qna:
     st.header("Chat RAG - Posez vos questions")
     st.write("Posez une question sur les événements OpenAgenda et recevez une réponse générée par Mistral.")
     
@@ -269,7 +275,117 @@ with tab_chat:
             st.warning("Veuillez entrer une question")
 
 # ============================================================================
-# ONGLET 2 : RECHERCHE
+# ONGLET 2 : CHATBOT CONVERSATIONNEL
+# ============================================================================
+
+with tab_chatbot:
+    st.header("🤖 Chatbot Conversationnel")
+    st.write("Discutez avec l'assistant IA - il garde l'historique de votre conversation!")
+    
+    # Sidebar pour gestion des conversations
+    with st.sidebar:
+        st.subheader("💾 Gérer les conversations")
+        
+        # Récupérer / créer la conversation
+        if "conversation_id" not in st.session_state:
+            st.session_state.conversation_id = None
+        
+        # Option 1: Nouvelle conversation
+        if st.button("➕ Nouvelle conversation"):
+            try:
+                response = requests.post(f"{API_BASE_URL}/chat/start", json={})
+                if response.status_code == 200:
+                    data = response.json()
+                    st.session_state.conversation_id = data["conversation_id"]
+                    st.session_state.conversation_messages = []
+                    st.success(f"✓ Nouvelle conversation créée!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erreur: {e}")
+        
+        # Option 2: Charger une conversation
+        try:
+            response = requests.get(f"{API_BASE_URL}/chat/list")
+            if response.status_code == 200:
+                conversations = response.json()["conversations"]
+                
+                if conversations:
+                    st.write("**Conversations récentes:**")
+                    for conv in conversations[:10]:
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            if st.button(f"{conv['id'][:6]}... ({conv['message_count']} msgs)", key=f"conv_{conv['id']}"):
+                                st.session_state.conversation_id = conv["id"]
+                                st.rerun()
+                        with col2:
+                            if st.button("❌", key=f"del_{conv['id']}", help="Supprimer"):
+                                requests.delete(f"{API_BASE_URL}/chat/{conv['id']}")
+                                st.rerun()
+        except Exception as e:
+            st.warning(f"Erreur chargement conversations: {e}")
+    
+    # Main chat interface
+    if not st.session_state.conversation_id:
+        st.info("👈 Créez ou chargez une conversation dans la sidebar pour commencer!")
+    else:
+        st.success(f"💬 Conversation: `{st.session_state.conversation_id}`")
+        
+        # Afficher l'historique
+        try:
+            response = requests.get(f"{API_BASE_URL}/chat/history/{st.session_state.conversation_id}")
+            if response.status_code == 200:
+                conversation = response.json()
+                
+                # Historique
+                if conversation["messages"]:
+                    st.subheader("📜 Historique")
+                    for msg in conversation["messages"]:
+                        if msg["role"] == "user":
+                            st.chat_message("user").write(msg["content"])
+                        else:
+                            st.chat_message("assistant").write(msg["content"])
+                else:
+                    st.info("Aucun message encore. Commencez la conversation!")
+        except Exception as e:
+            st.error(f"Erreur chargement historique: {e}")
+        
+        # Form pour nouveau message
+        st.markdown("---")
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            user_message = st.text_input("Votre message:", placeholder="Posez une question sur les événements...")
+        with col2:
+            send_button = st.button("📤 Envoyer", use_container_width=True)
+        
+        if send_button and user_message.strip():
+            # Afficher le message utilisateur
+            st.chat_message("user").write(user_message)
+            
+            # Appeler l'API
+            try:
+                with st.spinner("⏳ Assistant réfléchit..."):
+                    response = requests.post(
+                        f"{API_BASE_URL}/chat/message",
+                        json={
+                            "conversation_id": st.session_state.conversation_id,
+                            "message": user_message
+                        },
+                        timeout=30
+                    )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    st.chat_message("assistant").write(data["assistant_response"])
+                    st.success(f"✓ Message #{data['messages_count']}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Erreur API: {response.status_code}")
+            except Exception as e:
+                st.error(f"❌ Erreur: {e}")
+
+
+# ============================================================================
+# ONGLET 3 : RECHERCHE
 # ============================================================================
 
 with tab_search:
@@ -310,7 +426,7 @@ with tab_search:
             st.warning("Veuillez entrer une requête")
 
 # ============================================================================
-# ONGLET 3 : ADMINISTRATION
+# ONGLET 4 : ADMINISTRATION
 # ============================================================================
 
 with tab_admin:
@@ -354,7 +470,7 @@ with tab_admin:
             st.info(f"Configuration mise à jour: API={api_url}, Timeout={timeout}s")
 
 # ============================================================================
-# ONGLET 4 : DOCUMENTATION
+# ONGLET 5 : DOCUMENTATION
 # ============================================================================
 
 with tab_docs:

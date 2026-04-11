@@ -43,6 +43,8 @@ DATAIN/*.xlsx
 # Vector files (large)
 vectors/index.faiss
 vectors/metadata.jsonl
+vectors/*.bak
+*.bak
 
 # Environment
 .env

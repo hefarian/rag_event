@@ -127,21 +127,53 @@ def identify_old_events(
     indices_old = []
     indices_keep = []
     
+    # Track problematic dates for logging
+    parsing_errors = 0
+    past_events_list = []
+    future_events_list = []
+    
     for idx, meta in enumerate(metadata):
         date_str = meta.get("date", "")
         date_obj = parse_date(date_str)
         
         if date_obj is None:
             # Si pas de date, on garde (par sécurité)
+            if not date_str:
+                logger.debug(f"  Event {idx} missing date, keeping")
+            else:
+                logger.warning(f"  Event {idx} invalid date format: {date_str}")
+                parsing_errors += 1
             indices_keep.append(idx)
             continue
         
         event_date = date_obj.date()
+        title = meta.get("title", "Unknown")[:50]
         
         if event_date < today_date:
             indices_old.append(idx)
+            past_events_list.append({
+                "idx": idx,
+                "date": event_date,
+                "title": title,
+                "days_ago": (today_date - event_date).days
+            })
         else:
             indices_keep.append(idx)
+            future_events_list.append({
+                "idx": idx,
+                "date": event_date,
+                "title": title,
+                "days_ahead": (event_date - today_date).days
+            })
+    
+    # Log details about found events
+    if past_events_list:
+        logger.info(f"  Top past events (to remove):")
+        for evt in sorted(past_events_list, key=lambda x: x['days_ago'], reverse=True)[:5]:
+            logger.info(f"    • {evt['title']} ({evt['date']}) - {evt['days_ago']} days ago")
+    
+    if parsing_errors > 0:
+        logger.warning(f"  {parsing_errors} events with unparseable dates (kept for safety)")
     
     return indices_old, indices_keep
 
@@ -240,9 +272,38 @@ def clean_index(
     dim = index.d
     all_vectors = faiss.downcast(index).reconstruct_n(0, index.ntotal)
     
-    # Sélectionner les vecteurs à garder
-    keep_vectors = all_vectors[indices_keep]
-    keep_metadata = [metadata[idx] for idx in indices_keep]
+    # Vérifier la cohérence
+    if len(all_vectors) != len(metadata):
+        logger.warning(
+            f"⚠ Incohérence détectée: {len(all_vectors)} vecteurs "
+            f"vs {len(metadata)} métadonnées. Reconstruction en cours..."
+        )
+    
+    # Sélectionner les vecteurs à garder dans le bon ordre
+    keep_vectors_list = []
+    keep_metadata = []
+    
+    for idx in indices_keep:
+        if idx < len(all_vectors):
+            keep_vectors_list.append(all_vectors[idx])
+            keep_metadata.append(metadata[idx])
+        else:
+            logger.warning(f"⚠ Index {idx} hors limites (max: {len(all_vectors)-1})")
+    
+    keep_vectors = np.array(keep_vectors_list, dtype="float32")
+    
+    logger.info(f"  • Vecteurs à conserver: {len(keep_vectors)}")
+    logger.info(f"  • Métadonnées à conserver: {len(keep_metadata)}")
+    
+    if len(keep_vectors) == 0:
+        logger.error("Aucun vecteur à conserver ! Annulation.")
+        return {
+            "total_vectors_before": len(metadata),
+            "old_vectors_removed": len(indices_old),
+            "remaining_vectors": 0,
+            "dry_run": False,
+            "action": "error_no_vectors"
+        }
     
     # Créer le nouvel index
     new_index = faiss.IndexFlatL2(dim)

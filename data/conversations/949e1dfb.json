@@ -1,0 +1,26 @@
+{
+  "id": "949e1dfb",
+  "created_at": "2026-04-11T12:01:54.580090",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Quels événements aujourd'hui?",
+      "timestamp": "2026-04-11T12:01:54.588688"
+    },
+    {
+      "role": "assistant",
+      "content": "Voici les événements disponibles pour aujourd'hui, **samedi 11 avril 2026** :\n\n🎭 **Festival des Grandes-orgues de Notre-Dame de la Treille - 2026**\n📅 **18h30** | 📍 Lieu non spécifié\n*Un concert d'orgue avec Étienne WALHAIN, titulaire du Grand-Orgue de la Cathédrale.*\n\n🎶 **Ruff Rakam Sound System in meeting with Sub Ground Connexion**\n📅 **17h00** | 📍 Lieu non spécifié\n*Rencontre musicale autour d'un DIY électro et d'une control tower artisanale.*\n\n🎭 **Les Yeux de Taqqi** (Compagnie Paname Pilotis - Cédric Revollon)\n📅 **16h30** | 📍 Lieu non spécifié\n*Pièce de théâtre sur la confrontation avec ses peurs.*\n\n💡 *Petit conseil* : Si tu cherches une ambiance musicale, le **Ruff Rakam** à 17h pourrait te plaire ! Sinon, les deux autres événements offrent une touche plus classique ou théâtrale. 😊",
+      "timestamp": "2026-04-11T12:01:56.393709"
+    },
+    {
+      "role": "user",
+      "content": "et d'ici 4 jours ?",
+      "timestamp": "2026-04-11T12:04:12.032576"
+    },
+    {
+      "role": "assistant",
+      "content": "Voici les événements disponibles **d'ici 4 jours**, du **12 au 15 avril 2026** :\n\n🎭 **Festival des Grandes-orgues de Notre-Dame de la Treille - 2026**\n📅 **12 avril à 18h30** | 📍 Lieu non spécifié\n*Concert d'orgue avec Étienne WALHAIN.*\n\n🎶 **Ruff Rakam Sound System in meeting with Sub Ground Connexion**\n📅 **12 avril à 17h00** | 📍 Lieu non spécifié\n*Rencontre musicale autour d'un DIY électro.*\n\n🎭 **Les Yeux de Taqqi**\n📅 **13 avril à 16h30** | 📍 Lieu non spécifié\n*Pièce de théâtre sur la confrontation avec ses peurs.*\n\n🎭 **Festival des Grandes-orgues de Notre-Dame de la Treille - 2026**\n📅 **14 avril à 18h30** | 📍 Lieu non spécifié\n*Autre concert d'orgue avec Étienne WALHAIN.*\n\n🎭 **Festival des Grandes-orgues de Notre-Dame de la Treille - 2026**\n📅 **15 avril à 18h30** | 📍 Lieu non spécifié\n*Dernier concert d'orgue de la série.*\n\n---\n*Envie d’un style en particulier (musique, théâtre, classique) ? Je peux t’aider à affiner ! 😊*",
+      "timestamp": "2026-04-11T12:04:17.451523"
+    }
+  ]
+}

@@ -92,7 +92,20 @@ Remove outdated events **without** full index rebuild (~3 seconds vs ~30 minutes
 .\clean_old_events.ps1 -NoBackup
 ```
 
-**For details**: See [doc/CLEAN_OLD_EVENTS_GUIDE.md](doc/CLEAN_OLD_EVENTS_GUIDE.md)
+### Diagnostic & Troubleshooting
+
+Check index consistency and past events:
+
+```bash
+# Diagnose index state
+python scripts/diagnostic_index.py
+
+# Outputs: vector count, metadata sync, past events found, recommendations
+```
+
+**For issues**: See [doc/TROUBLESHOOTING.md](doc/TROUBLESHOOTING.md)
+
+**Full details**: See [doc/CLEAN_OLD_EVENTS_GUIDE.md](doc/CLEAN_OLD_EVENTS_GUIDE.md)
 
 ## 📋 API Reference
 
