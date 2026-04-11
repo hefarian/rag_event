@@ -1,267 +1,261 @@
-Puls-Events — RAG POC
+# Puls-Events — RAG POC
 
-This repository contains a small proof-of-concept for a Retrieval-Augmented Generation system
-that uses OpenAgenda event data, FAISS for vector search, LangChain orchestration and Mistral for
-embeddings/generation.
+[![Tests CI](https://github.com/USERNAME/PROJET09/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/PROJET09/actions/workflows/ci.yml)
 
-> **Now with FastAPI + Swagger + Streamlit Interface + Docker!** 🚀
+RAG (Retrieval-Augmented Generation) system using OpenAgenda events, FAISS vector search, LangChain orchestration, and Mistral LLM.
 
----
+> **FastAPI + Swagger + Streamlit Interface + Docker** 🚀
 
-## 📁 Project Structure
+## 🏗️ Architecture
 
-### Root Level (Clean, Only Essentials)
-```
-init_index.py          ← Initialiser l'index FAISS 2026+ (utilité)
-streamlit_app.py       ← Interface utilisateur  (utilité)
-README.md              ← Ce fichier
-docker-compose.yml     ← Docker orchestration
-requirements.txt       ← Dependencies
-.gitignore             ← Git rules (archive/ ignoré)
-```
-
----
-
-## 📋 Architecture
-
-- **Backend API**: FastAPI with Swagger documentation (`/docs`)
-- **Frontend UI**: Streamlit interactive interface for users
-- **Vector Store**: FAISS for efficient similarity search
-- **Containerization**: Docker + Docker Compose for easy deployment
+- **Backend API**: FastAPI with Swagger UI (`/docs`)
+- **Frontend UI**: Streamlit interactive dashboard
+- **Vector Store**: FAISS for similarity search
+- **LLM**: Mistral for embeddings and text generation
+- **Deployment**: Docker Compose
 
 ## 🚀 Quick Start
 
-### Option 1: Docker Compose (Recommended)
-
-**Prerequisites**: Docker and Docker Compose installed
+### Docker (Recommended)
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd PROJET09
-
-# Copy environment variables template
+# Setup environment
 cp .env.example .env
-# Edit .env with your API keys
-# MISTRAL_API_KEY=your_key_here
-# OPENAGENDA_API_KEY=your_key_here
+# Edit .env with MISTRAL_API_KEY and OPENAGENDA_API_KEY
 
-# Start the services
-docker-compose up -d
-
-# Wait for services to be healthy
-docker-compose ps
-
-# Access the application
-# - Streamlit UI: http://localhost:8501
-# - FastAPI Swagger: http://localhost:8000/docs
-# - API Health: http://localhost:8000/health
-```
-
-### Option 2: Local Development
-
-**Prerequisites**: Python 3.8+, pip
-
-```powershell
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Build FAISS index (optional, if you have data)
-python scripts/build_index.py
-
-# Start API in one terminal
-uvicorn api.app:app --reload --port 8000
-
-# Start Streamlit in another terminal
-streamlit run streamlit_app.py --server.port 8501
-```
-
-## 📚 API Endpoints
-
-All endpoints are documented in **Swagger UI**: `http://localhost:8000/docs`
-
-### Health & Status
-- `GET /` - API status
-- `GET /health` - Health check (for Docker)
-
-### RAG Operations
-- `POST /ask` - Ask a question to the RAG system
-  ```json
-  {
-    "question": "Quels concerts jazz à Paris cette semaine ?",
-    "top_k": 3
-  }
-  ```
-- `POST /search` - Similarity search without generation
-  ```json
-  {
-    "question": "Jazz concerts",
-    "top_k": 5
-  }
-  ```
-
-### Administration
-- `POST /rebuild` - Rebuild FAISS index from source data
-
-## 🎨 Streamlit Interface
-
-Access at `http://localhost:8501`
-
-Features:
-- **💬 Chat RAG**: Ask questions and get answers with sources
-- **🔍 Search**: Find similar documents
-- **⚙️ Administration**: Manage index and configuration
-- **📚 Documentation**: API reference and links
-
-## 🐳 Docker Deployment
-
-### Build Images Individually (if needed)
-
-```bash
-# Build API image
-docker build -f Dockerfile.api -t puls-events-api:latest .
-
-# Build Streamlit image
-docker build -f Dockerfile.streamlit -t puls-events-ui:latest .
-
-# Run API container
-docker run -p 8000:8000 \
-  -e MISTRAL_API_KEY=your_key \
-  -v ./vectors:/app/vectors \
-  puls-events-api:latest
-
-# Run Streamlit container
-docker run -p 8501:8501 \
-  --network host \
-  puls-events-ui:latest
-```
-
-### Docker Compose Useful Commands
-
-```bash
 # Start services
 docker-compose up -d
 
+# Access
+# - API Swagger: http://localhost:8000/docs
+# - Streamlit UI: http://localhost:8501
+```
+
+### Local Development
+
+```powershell
+# Setup Python environment
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+# Build index
+python scripts/build_index.py
+
+# Terminal 1: Start API
+uvicorn api.app:app --reload --port 8000
+
+# Terminal 2: Start UI
+streamlit run streamlit_app.py --server.port 8501
+```
+
+## 📚 Core Commands
+
+### Building & Indexing
+
+```bash
+# Build FAISS index from OpenAgenda data
+python scripts/build_index.py
+
+# Clean old events (remove past dates, faster than full rebuild)
+.\clean_old_events.ps1              # PowerShell
+clean_old_events.bat                # Batch
+python scripts/clean_old_events.py  # Python direct
+```
+
+### Verification
+
+```bash
+# API health
+curl http://localhost:8000/health
+
+# Ask a question
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Quels concerts cette semaine?"}'
+```
+
+## 🧹 Index Maintenance
+
+### Clean Old Events
+
+Remove outdated events **without** full index rebuild (~3 seconds vs ~30 minutes):
+
+```powershell
+# Simulate (see what would be removed)
+.\clean_old_events.ps1 -DryRun
+
+# Execute (creates automatic backups)
+.\clean_old_events.ps1
+
+# Without backup
+.\clean_old_events.ps1 -NoBackup
+```
+
+**For details**: See [doc/CLEAN_OLD_EVENTS_GUIDE.md](doc/CLEAN_OLD_EVENTS_GUIDE.md)
+
+## 📋 API Reference
+
+All endpoints documented in **Swagger UI** at `/docs`
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/` | GET | Status |
+| `/health` | GET | Health check |
+| `/ask` | POST | RAG query with generation |
+| `/search` | POST | Similarity search only |
+| `/rebuild` | POST | Rebuild index from source |
+
+### Example Request
+
+```json
+POST /ask
+{
+  "question": "Quels événements à Paris cette weekend?",
+  "top_k": 3
+}
+```
+
+## 🎨 UI Features
+
+**Streamlit** at `http://localhost:8501`:
+- 💬 **RAG Chat**: Ask questions, get answers with sources
+- 🔍 **Search**: Find similar documents
+- ⚙️ **Admin**: Manage index and settings
+- 📚 **Docs**: API reference
+
+## 🐳 Docker Commands
+
+```bash
 # View logs
 docker-compose logs -f api
 docker-compose logs -f streamlit
 
-# Stop services
-docker-compose down
-
 # Rebuild images
 docker-compose up -d --build
 
-# Remove volumes (clean everything)
-docker-compose down -v
+# Stop/cleanup
+docker-compose down
+docker-compose down -v  # Remove volumes
 ```
 
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env` file (copy from `.env.example`):
-
-```env
-MISTRAL_API_KEY=your_api_key
-OPENAGENDA_API_KEY=your_api_key
-LOG_LEVEL=INFO
-DEBUG=false
-```
-
-### API Configuration
-
-API settings in `api/app.py`:
-- Port: `8000` (configurable in docker-compose.yml)
-- Host: `0.0.0.0` (accessible from outside container)
-- CORS: Enabled for all origins
-
-### Streamlit Configuration
-
-Streamlit settings in `Dockerfile.streamlit`:
-- Port: `8501`
-- Server mode: Headless (for Docker)
-
-## ✅ Monitoring
-
-### Health Checks
-
-Both services include Docker health checks:
-
-```bash
-# Check API health
-curl http://localhost:8000/health
-
-# Check Streamlit (returns HTML if healthy)
-curl http://localhost:8501/healthz
-```
-
-### Logs
-
-```bash
-# API logs
-docker logs puls-events-api -f
-
-# Streamlit logs
-docker logs puls-events-ui -f
-```
-
-## 📦 Project Structure
+## 📁 Project Structure
 
 ```
 PROJET09/
 ├── api/
-│   └── app.py              # FastAPI application
+│   └── app.py                    FastAPI application
 ├── scripts/
-│   └── build_index.py      # Index building script
-├── streamlit_app.py        # Streamlit interface
-├── Dockerfile.api          # API container
-├── Dockerfile.streamlit    # Streamlit container
-├── docker-compose.yml      # Orchestration
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+│   ├── build_index.py           Full index build
+│   └── clean_old_events.py      Incremental cleanup
+├── tests/
+│   └── test_clean_old_events.py Test suite
+├── streamlit_app.py              UI/Dashboard
+├── docker-compose.yml            Container orchestration
+├── requirements.txt              Python dependencies
+└── README.md                     This file
 ```
 
-## 🧪 Testing
+## 🔧 Configuration
+
+### Environment (.env)
+
+```env
+MISTRAL_API_KEY=your_key
+OPENAGENDA_API_KEY=your_key
+LOG_LEVEL=INFO
+DEBUG=false
+```
+
+### API Settings (api/app.py)
+
+- **Port**: 8000 (configurable in docker-compose.yml)
+- **Host**: 0.0.0.0 (accessible from outside)
+- **CORS**: Enabled for all origins
+
+## ✅ Testing
 
 ```bash
-# Run tests locally
+# Unit tests
 pytest tests/
 
-# Run tests in Docker
+# Test specific module
+pytest tests/test_clean_old_events.py -v
+
+# In Docker
 docker-compose exec api pytest tests/
+
+# With coverage report
+pytest tests/ --cov=scripts --cov-report=html
 ```
 
-## 🔄 Workflow
+## 🔄 CI/CD Pipeline
 
-1. **Data Ingestion**: OpenAgenda events → JSON/Parquet
-2. **Indexing**: Text chunking → Mistral embeddings → FAISS index
-3. **API**: FastAPI with Swagger documentation
-4. **UI**: Streamlit for user interaction
-5. **Deployment**: Docker + Docker Compose
+### GitHub Actions
+
+Automated tests run on every push and pull request:
+
+```yaml
+# Triggers on: push to main/develop, PR to main/develop
+# Runs:
+#   - Tests on Python 3.8, 3.9, 3.10, 3.11
+#   - Linting with flake8
+#   - Coverage report to Codecov
+```
+
+**Workflow file**: [.github/workflows/ci.yml](.github/workflows/ci.yml)
+
+View build status: [![Tests CI Badge](https://github.com/USERNAME/PROJET09/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/PROJET09/actions)
+
+## 📈 Workflow
+
+1. **Ingest**: OpenAgenda events → JSON
+2. **Index**: Chunk text → Mistral embeddings → FAISS
+3. **Search**: Query in FAISS → retrieve top-k
+4. **Generate**: Pass to Mistral LLM → answer with sources
+5. **Serve**: FastAPI + Streamlit + Docker
+
+## 🚀 Deployment
+
+### Production Checklist
+
+- [ ] Use `faiss-gpu` instead of `faiss-cpu` (if hardware available)
+- [ ] Enable authentication on API endpoints
+- [ ] Add rate limiting
+- [ ] Configure persistent volume for vectors/
+- [ ] Setup logging aggregation
+- [ ] Use secrets manager for API keys
+
+## 📚 Documentation
+
+Quick reference and detailed guides available in `doc/`:
+
+| File | Purpose |
+|------|---------|
+| `CLEAN_OLD_EVENTS_GUIDE.md` | Complete guide for index cleanup |
+| `COMMANDS.md` | Copy-paste ready commands |
+| `CHEAT_SHEET.md` | Quick reference card |
+| `README_AGENT.txt` | Agent creation summary |
+
+Start with: [doc/COMMANDS.md](doc/COMMANDS.md)
+
+## 🤖 AI Agents
+
+See `.github/copilot-instructions.md` for AI agent guidance on this project.
 
 ## 📝 Notes
 
-- The system uses FAISS-CPU for portability (use `faiss-gpu` in production if needed)
-- Streamlit depends on API being healthy before startup (configured in docker-compose)
-- Volumes are mounted for persistent storage of vectors and data
-- Both services have automatic restart policies
+- FAISS-CPU is used for portability (use GPU version for production)
+- Streamlit requires API to be healthy at startup
+- Volumes are mounted for persistent storage
+- Both services auto-restart on failure (docker-compose)
+- Data from DATAIN/ is processed into vectors/ directory
 
-## 📞 Support
+## 🎯 Next Steps
 
-For issues or questions, check:
-- `.github/copilot-instructions.md` for AI agent guidance
-- `api/app.py` for endpoint documentation
-- `streamlit_app.py` for UI logic
-- Docker logs: `docker-compose logs`
+1. Build your first index: `python scripts/build_index.py`
+2. Start services: `docker-compose up -d`
+3. Try the API: `curl http://localhost:8000/docs`
+4. Use the UI: Open `http://localhost:8501`
+5. Clean old events: `.\clean_old_events.ps1 -DryRun`
 
-## 🚀 Next Steps
-
-1. **Implement RAG Logic**: Connect to actual Mistral API
-2. **Add Real Data**: Ingest OpenAgenda events
-3. **Scale**: Use faiss-gpu, add caching, optimize prompts
-4. **Monitor**: Add Prometheus metrics, logging aggregation
