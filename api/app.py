@@ -606,8 +606,6 @@ def rebuild_index():
     Utilise un thread séparé pour ne pas bloquer les autres requêtes.
     """
     global REBUILD_IN_PROGRESS
-    global _faiss_index
-    global _metadata_list
     
     if REBUILD_IN_PROGRESS:
         return StatusResponse(
@@ -620,6 +618,8 @@ def rebuild_index():
         REBUILD_IN_PROGRESS = True
         
         def run():
+            global _faiss_index
+            global _metadata_list
             logger.info("Démarrage de la reconstruction de l'index...")
             try:
                 result = subprocess.run(
