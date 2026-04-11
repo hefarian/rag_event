@@ -153,62 +153,95 @@ def chunk_text(text: str, max_len: int = 400) -> List[str]:
     """Découpe un texte en fragments (chunks) de taille maximale.
     Utilisé pour diviser les descriptions d'événements avant vectorisation.
     
+    POURQUOI? Les embeddings (vecteurs) fonctionnent mieux sur du texte court (~400 chars)
+    plutôt que sur de longues descriptions (1000+ chars).
+    
+    EXEMPLE:
+    Input: "Jazz Night le 15 avril à Paris. Un superbe concert avec..."
+    Output: ["Jazz Night le 15 avril à Paris...", "avec musiciens...", ...]
+    
     Args:
         text: Texte à découper
-        max_len: Taille maximale d'un chunk
+        max_len: Taille maximale d'un chunk (défaut 400 chars = ~100 mots)
     
     Returns:
-        Liste des chunks
+        Liste des chunks (fragments)
     """
+    # Si le texte est vide ou déjà court, retourner tel quel
     if not text or len(text) <= max_len:
         return [text] if text else []
     
+    # Découper le texte en fragments de max_len caractères
     parts = []
     i = 0
     while i < len(text):
+        # Prendre max_len caractères à partir de position i
         parts.append(text[i:i+max_len])
+        # Avancer i pour la prochaine itération
         i += max_len
+    
     return parts
 
 
 def embed_texts(texts: List[str]) -> np.ndarray:
     """Génère les embeddings (vecteurs) pour une liste de textes.
-    Essaie d'utiliser l'API Mistral, sinon utilise des vecteurs aléatoires.
+    
+    UN EMBEDDING C'EST QUOI?
+    Un embedding est une représentation numérique d'un texte.
+    Exemple: "Jazz" → [0.12, -0.45, 0.89, ...] (768 nombres)
+    
+    CÀ SERT À QUOI?
+    FAISS compare ces vecteurs pour trouver les textes similaires.
+    "Jazz" et "Musique jazz" ont des vecteurs proches → Découverte!
+    
+    COMMENT ÇA MARCHE?
+    Option 1: Utiliser Mistral API (API cloud) - Meilleur mais coûteux
+    Option 2: Vecteurs aléatoires - Rapide mais moins bon (fallback)
     
     Args:
-        texts: Liste des textes à vectoriser
+        texts: Liste des textes à vectoriser ("Jazz Night", "Concert...", etc.)
     
     Returns:
-        Matrice numpy de vecteurs (float32)
+        Matrice numpy de vecteurs (shape: len(texts) x 768)
     """
     try:
+        # Essayer d'utiliser Mistral pour générer les embeddings
         from mistral import MistralClient
         api_key = os.environ.get("MISTRAL_API_KEY")
+        
         if not api_key:
             logger.warning("MISTRAL_API_KEY non définie. Utilisation de vecteurs aléatoires.")
             raise ValueError("No API key")
         
         logger.info("Utilisation de Mistral pour les embeddings...")
         mc = MistralClient(api_key=api_key)
+        
         # Générer un embedding pour chaque texte
         embs = []
         for i, text in enumerate(texts):
+            # Afficher la progression tous les 100 textes
             if i % 100 == 0:
                 logger.info(f"  Embedding {i}/{len(texts)}...")
             try:
+                # Appeler Mistral API pour générer le vecteur
                 emb = mc.embed(text)
                 embs.append(emb)
             except Exception as e:
                 logger.warning(f"  Erreur embedding texte {i}: {e}")
-                # Fallback: vecteur aléatoire
+                # Si Mistral échoue pour ce texte, utiliser un vecteur aléatoire
                 embs.append(np.random.rand(768).astype("float32"))
         
         return np.array(embs, dtype="float32")
     
     except Exception as e:
+        # Fallback: Mistral indisponible, utiliser vecteurs aléatoires
         logger.info(f"Mistral non disponible ({e}). Utilisation de vecteurs aléatoires...")
-        dim = 768  # dimension standard des vecteurs
+        
+        # Dimension standard des embeddings (768 = taille standard Mistral)
+        dim = 768
+        # RNG = Random Number Generator avec seed fixe pour reproductibilité
         rng = np.random.RandomState(42)
+        # Générer len(texts) vecteurs aléatoires de dimension 768
         return rng.rand(len(texts), dim).astype("float32")
 
 
@@ -266,36 +299,49 @@ def build_index(
     meta = []
     failed_events = 0
     
-    # Traiter chaque événement
+    # ========== ÉTAPE 1: TRAITER CHAQUE ÉVÉNEMENT ==========
+    # Pour chaque événement OpenAgenda:
+    # 1. Extraire les infos (titre, description, date, lieu)
+    # 2. Découper la description en chunks (fragments)
+    # 3. Garder les métadonnées pour chaque chunk
+    
     for idx, event in enumerate(events):
+        # Afficher la progression tous les 1000 événements
         if idx % 1000 == 0:
             logger.info(f"Traitement événement {idx}/{len(events)}...")
         
         try:
-            # Extraire les infos pertinentes
+            # Extraire les infos pertinentes du format OpenAgenda
             info = extract_event_info(event)
             if not info:
                 failed_events += 1
                 continue
             
-            # Combiner titre et description
+            # Combiner titre + description pour avoir un texte complet
+            # Exemple: "Jazz Night\nA cozy jazz concert featuring..."
             text = (info.get("title", "") + "\n" + info.get("description", "")).strip()
             
             # Ignorer les événements sans texte significatif
+            # (Au moins 10 caractères)
             if len(text) < min_text_len:
                 continue
             
-            # Découper en fragments
+            # Découper le texte en chunks (fragments)
+            # "Jazz Night 20h. Super concert. Musique live..." 
+            # → ["Jazz Night 20h. Super concert...", "Musique live..." ]
             for chunk in chunk_text(text):
                 if len(chunk) >= min_text_len:
+                    # Sauvegarder le chunk (texte à vectoriser)
                     chunks.append(chunk)
-                    # Garder les métadonnées
+                    
+                    # Sauvegarder les métadonnées (pour récupération ultérieure)
+                    # Exemple: {"event_id": "123", "title": "Jazz Night", "date": "2026-04-15"}
                     meta.append({
                         "event_id": info.get("event_id"),
                         "title": info.get("title"),
                         "date": info.get("date"),
                         "location": info.get("location"),
-                        "text_preview": chunk[:100]  # Aperçu du chunk
+                        "text_preview": chunk[:100]  # Aperçu du chunk pour débogger
                     })
         
         except Exception as e:
@@ -314,24 +360,39 @@ def build_index(
         logger.error("FAISS non disponible. Installez: pip install faiss-cpu")
         raise RuntimeError("FAISS not installed")
     
-    # Générer les vecteurs
+    # ========== ÉTAPE 2: GÉNÉRER LES EMBEDDINGS ==========
+    # Convertir les textes + en vecteurs numériques
+    # Exemple: "Jazz Night" → [0.12, -0.45, 0.89, ...]
     logger.info("Génération des embeddings...")
     vectors = embed_texts(chunks)
-    dim = vectors.shape[1]
+    dim = vectors.shape[1]  # Dimensionalité (normalement 768)
     logger.info(f"Vecteurs générés: shape={vectors.shape}, dim={dim}")
     
-    # Créer et remplir l'index FAISS
+    # ========== ÉTAPE 3: CRÉER L'INDEX FAISS ==========
+    # FAISS crée un "Google" pour chercher rapidement le vecteur le plus proche
+    # IndexFlatL2 = Distance Euclidienne (L2) = Mesure de similarité
+    # 
+    # Comment FAISS fonctionne:
+    # Index FAISS = Structure mathématique qui organise 50,000 vecteurs
+    #               pour chercher les k plus proches en < 1ms
     logger.info("Construction de l'index FAISS...")
-    index = faiss.IndexFlatL2(dim)
-    index.add(vectors)
+    index = faiss.IndexFlatL2(dim)  # Créer un index L2 (distance)
+    index.add(vectors)  # Ajouter tous les vecteurs au index
     
-    # Sauvegarder l'index
+    # ========== ÉTAPE 4: SAUVEGARDER L'INDEX ==========
+    # Sauvegarder l'index FAISS sur disque (fichier binaire)
+    # Format: .faiss (propriétaire Facebook/Meta)
     faiss.write_index(index, index_path)
     logger.info(f"✓ Index sauvegardé: {index_path}")
     
-    # Sauvegarder les métadonnées au format JSONL
+    # ========== ÉTAPE 5: SAUVEGARDER LES MÉTADONNÉES ==========
+    # Sauvegarder aussi les infos de chaque chunk (titre, date, lieu)
+    # Format: JSONL (JSON Lines = une ligne JSON = une métadonnée)
+    # Utilisé pour récupérer event_id, titre, etc quand FAISS retourne une index
     with open(metadata_path, "w", encoding="utf-8") as f:
         for m in meta:
+            # Écrire une ligne JSON pour chaque chunk
+            # Exemple: {"event_id": "123", "title": "Jazz Night", "date": "2026-04-15"}
             f.write(json.dumps(m, ensure_ascii=False) + "\n")
     logger.info(f"✓ Métadonnées sauvegardées: {metadata_path}")
     
