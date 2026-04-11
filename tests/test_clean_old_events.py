@@ -52,11 +52,14 @@ from pathlib import Path
 index_path = Path("vectors/index.faiss")
 metadata_path = Path("vectors/metadata.jsonl")
 
+index_status = '✓ Existe' if index_path.exists() else '❌ N\'existe pas'
+metadata_status = '✓ Existe' if metadata_path.exists() else '❌ N\'existe pas'
+
 print(f"  Index: {index_path}")
-print(f"    -> {'✓ Existe' if index_path.exists() else '❌ N\\'existe pas'}")
+print(f"    -> {index_status}")
 
 print(f"  Métadonnées: {metadata_path}")
-print(f"    -> {'✓ Existe' if metadata_path.exists() else '❌ N\\'existe pas'}")
+print(f"    -> {metadata_status}")
 
 # Test 3: Charger les métadonnées (si elles existent)
 if metadata_path.exists():
