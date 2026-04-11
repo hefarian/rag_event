@@ -197,11 +197,12 @@ async def test_query_model_validation():
 def test_full_pipeline_sample():
     """Test complet du pipeline avec données d'exemple."""
     # Créer des événements de test
+    long_text = "x" * 400
     events = [
         {
             "uid": 1,
             "title_fr": "Concert",
-            "description_fr": f"Description concert {"x" * 400}",
+            "description_fr": f"Description concert {long_text}",
             "firstdate_begin": "2026-04-15"
         },
         {
