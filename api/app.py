@@ -1,13 +1,28 @@
 """Application FastAPI pour le système RAG Puls-Events.
-Endpoints disponibles:
-- GET  /                : status de l'API
-- GET  /health         : vérification de l'état
-- POST /ask             : poser une question au système RAG
-- POST /rebuild         : reconstruire l'index FAISS
-- POST /search          : recherche similaire dans l'index
-- GET  /docs            : documentation Swagger
 
-Déploiement via Docker + docker-compose.
+QU'EST-CE QUE RAG?
+RAG = "Retrieval Augmented Generation" (Génération Augmentée par Récupération)
+Concept: Combiner la recherche d'information avec la génération de texte par IA
+
+Flux RAG simplifié:
+1. Utilisateur pose une question
+2. FAISS recherche les événements les plus similaires (Retrieval = étape 1)
+3. Mistral (IA) génère une réponse en se basant sur ces événements (Generation = étape 2)
+4. API retourne la réponse augmentée d'informations réelles
+
+ENDPOINTS DISPONIBLES:
+- GET  /                : Statut de l'API (pour vérifier qu'elle répond)
+- GET  /health         : Vérification détaillée de l'état
+- POST /ask             : ⭐ Poser une question au système RAG
+- POST /rebuild         : Reconstruire l'index FAISS (si données changent)
+- POST /search          : Recherche similaire simple dans l'index
+- GET  /docs            : Documentation interactive Swagger
+- POST /chat/start      : Démarrer un chat conversationnel
+- POST /chat/message    : Envoyer un message dans le chat
+
+DÉPLOIEMENT:
+- En local: python -m uvicorn api.app:app --reload
+- En Docker: docker-compose up (recommandé)
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -451,29 +466,54 @@ def validate_temporal_results(question: str, results: List[SearchResult]) -> Lis
 
 
 def search_in_faiss(query: str, top_k: int = 3) -> List[SearchResult]:
-    """Recherche SIMPLE et directe dans FAISS."""
+    """
+    Recherche dans l'index FAISS pour trouver les événements similaires.
+    
+    COMMENT ÇA MARCHE?
+    1. Convertir la question en vecteur (numéros) avec embed_text()
+    2. FAISS compare ce vecteur à tous les événements indexés
+    3. Retourner les top_k événements les plus proches
+    
+    Args:
+        query: Question de l'utilisateur (ex: "concerts jazz")
+        top_k: Nombre d'événements à retourner (défaut: 3)
+        
+    Returns:
+        Liste de SearchResult (événements trouvés avec leur score de similarité)
+    """
     try:
+        # 1. Charger l'index FAISS depuis le disque et ses métadonnées
         index, metadata = get_faiss_index()
         
         if index is None or metadata is None:
             logger.warning("Index FAISS non chargé")
             return []
         
-        # Vectoriser la question
+        # 2. Convertir la question en vecteur numérique
+        # Exemple: "concerts" → [0.12, -0.45, 0.89, ...]
         query_vector = embed_text(query)
+        logger.debug(f"Vecteur généré pour: '{query}'")
         
-        # Rechercher les top_k résultats
+        # 3. FAISS cherche les top_k vecteurs les plus proches
+        # distances: distance euclidienne entre la question et chaque événement
+        # indices: numéro de position de chaque événement
         distances, indices = index.search(query_vector, min(top_k, index.ntotal))
+        logger.info(f"FAISS: {len(indices[0])} résultats trouvés")
         
+        # 4. Transformer les résultats bruts FAISS en SearchResult lisibles
         results = []
         for dist, idx in zip(distances[0], indices[0]):
             if 0 <= idx < len(metadata):
+                # Récupérer les métadonnées complètes de l'événement
                 meta = metadata[idx]
+                
+                # Convertir la distance en score de similarité (0 à 1)
+                # Plus la distance est petite, plus la score est proche de 1
                 score = 1.0 / (1.0 + dist)
                 
                 results.append(SearchResult(
                     score=float(score),
-                    content=meta.get("text_preview", "")[:300],
+                    content=meta.get("text_preview", "")[:300],  # Descrip courte
                     metadata={
                         "event_id": meta.get("event_id"),
                         "title": meta.get("title"),
@@ -482,11 +522,13 @@ def search_in_faiss(query: str, top_k: int = 3) -> List[SearchResult]:
                     }
                 ))
         
-        logger.info(f"FAISS: {len(results)} résultats pour '{query}'")
+        logger.info(f"FAISS: {len(results)} résultats pour '{query}' (scores: {[round(r.score, 2) for r in results]})")
         return results
     
     except Exception as e:
         logger.error(f"Erreur FAISS: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
