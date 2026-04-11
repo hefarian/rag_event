@@ -51,18 +51,37 @@ def load_metadata(path: str) -> List[Dict]:
 
 
 def load_index(path: str):
-    """Charge l'index FAISS."""
+    """Charge l'index FAISS depuis le disque.
+    
+    POURQUOI?
+    L'index FAISS est stocké sous forme de fichier binaire index.faiss
+    On le charge en mémoire pour pouvoir le manipuler/analyser
+    """
     return faiss.read_index(str(path))
 
 
 def safe_extract_vectors(index, metadata: List[Dict]) -> np.ndarray:
-    """Extrait les vecteurs de manière sûre."""
-    dim = index.d
-    ntotal = index.ntotal
+    """Extrait les vecteurs de manière sûre.
+    
+    PROBLÈME:
+    FAISS a pas toujours une méthode facile pour récupérer tous les vecteurs
+    Cela dépend du type d'index
+    
+    SOLUTION:
+    Essayer 2 méthodes:
+    1. downcast() = Rapide si ça marche
+    2. reconstruct() = Lent mais marche toujours
+    
+    RETOUR:
+    Array numpy avec tous les vecteurs (ntotal x dimension)
+    """
+    dim = index.d  # Dimensionnalité (768 normalement)
+    ntotal = index.ntotal  # Nombre total de vecteurs
     
     logger.info(f"Extraction de {ntotal} vecteurs (dimension {dim})...")
     
-    # Méthode 1: Essayer downcast (rapide)
+    # ========== MÉTHODE 1: DOWNCAST (RAPIDE) ==========
+    # downcast = Essayer de convertir vers un type qu'on peut accéder directement
     try:
         vectors = faiss.downcast(index).reconstruct_n(0, ntotal)
         logger.info(f"  ✓ Downcast OK")
@@ -70,17 +89,22 @@ def safe_extract_vectors(index, metadata: List[Dict]) -> np.ndarray:
     except Exception as e:
         logger.warning(f"  ⚠ Downcast failed: {e}")
     
-    # Méthode 2: Reconstruire par index (lent mais sûr)
+    # ========== MÉTHODE 2: RECONSTRUCT INDIVIDUEL (LENT MAIS SÛR) ==========
+    # Si downcast échoue, reconstruire chaque vecteur individuellement
     logger.info(f"  Reconstruction individuelle ... (peut prendre du temps)")
+    # Créer un array vide pour y mettre les vecteurs
     vectors = np.zeros((ntotal, dim), dtype="float32")
     
+    # Pour chaque vecteur dans l'index
     for i in range(ntotal):
         if i % 1000 == 0:
             logger.info(f"    {i}/{ntotal}")
         try:
+            # Récupérer le vecteur i
             vectors[i] = index.reconstruct(i)
         except Exception as e:
             logger.warning(f"  Erreur reconstruction vector {i}: {e}")
+            # Fallback: vecteur aléatoire
             vectors[i] = np.random.rand(dim).astype("float32")
     
     logger.info(f"  ✓ {ntotal} vecteurs extraits")
@@ -92,7 +116,17 @@ def clean_index_robust(
     metadata_path: str = None,
     dry_run: bool = False
 ) -> Dict:
-    """Nettoyage robuste de l'index."""
+    """Nettoyage robuste de l'index FAISS.
+    
+    QUOI TESTE-T-ON?
+    1. Index et metadata existent?
+    2. Index et metadata cohérents? (même nombre de lignes)
+    3. Événements passés? Les détecter et les sauvegarder
+    4. Optionnel: créer un nouvel index sans les passés
+    
+    RETOUR:
+    Dictionnaire avec stats du nettoyage
+    """
     if index_path is None:
         index_path = str(DEFAULT_INDEX_PATH)
     if metadata_path is None:
@@ -102,15 +136,19 @@ def clean_index_robust(
     logger.info("NETTOYAGE ROBUSTE DE L'INDEX")
     logger.info("=" * 70)
     
-    # Charger
+    # ========== ÉTAPE 1: CHARGER LE INDEX ==========
     logger.info("Chargement...")
+    # Charger l'index FAISS depuis le fichier
     index = load_index(index_path)
+    # Charger les métadonnées (event_id, titre, date, lieu)
     metadata = load_metadata(metadata_path)
     
     logger.info(f"  Index: {index.ntotal} vecteurs")
     logger.info(f"  Metadata: {len(metadata)} lignes")
     
-    # Vérifier cohérence
+    # ========== ÉTAPE 2: VÉRIFIER LA COHÉRENCE ==========
+    # L'index et les métadonnées DOIVENT avoir la même taille
+    # Si non, quelque chose s'est cassé
     if index.ntotal != len(metadata):
         logger.error(f"⚠ Incohérence MAJEURE: {index.ntotal} ≠ {len(metadata)}")
         logger.error("Action requise: Rebuild complet")

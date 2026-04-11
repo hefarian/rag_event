@@ -51,49 +51,68 @@ def filter_events(
     """
     Filtre les événements pour garder uniquement ceux à partir de min_year.
     
+    POURQUOI CE FILTRE?
+    Le fichier JSON OpenAgenda contient 90% d'événements 2023-2024 (passés)
+    Si on indexe tout:
+    - Q: "Demain y-a-t-il un événement?"
+    - R: "Oui: Concert le 15 janvier 2024" (PASSÉ!)
+    
+    Avec le filtre 2026+:
+    - Q: "Demain?"
+    - R: "Jazz Night le 15 avril 2026" (FUTUR!)
+    
     Args:
-        input_path: Chemin du fichier JSON source (1M+ événements)
-        output_path: Chemin du fichier filtré
-        min_year: Année minimale (défaut: 2026)
+        input_path: Chemin du fichier JSON source (1M+ événements bruts)
+        output_path: Chemin du fichier filtré (couche)
+        min_year: Année minimale à conserver (défaut: 2026)
     
     Returns:
-        Nombre d'événements sauvegardés
+        Nombre d'événements sauvegardés (après filtre)
     """
     logger.info("=" * 70)
     logger.info(f"ÉTAPE 1: Filtrage des événements ({min_year}+)")
     logger.info("=" * 70)
     
+    # Vérifier que le fichier source existe
     if not input_path.exists():
         logger.error(f"Fichier source non trouvé: {input_path}")
         return 0
     
+    # Charger tous les événements du fichier JSON
     logger.info(f"Lecture du fichier source: {input_path}")
     with open(input_path, 'r', encoding='utf-8') as f:
         all_events = json.load(f)
     
     logger.info(f"  Total événements: {len(all_events):,}")
     
-    # Filtrer pour les événements 2026+
+    # Filtrer pour garder uniquement les événements 2026+
     filtered = []
+    # OpenAgenda peut avoir différents noms de champs de date
     date_fields = ['date', 'firstdate_begin', 'startDate', 'begin']
     
     for i, evt in enumerate(all_events):
+        # Afficher la progression tous les 100k événements
         if (i + 1) % 100000 == 0:
             logger.info(f"  Traitement: {i + 1:,} / {len(all_events):,}")
         
         try:
             # Chercher un champ date selon la structure OpenAgenda
+            # Essayer chaque nom possible de champ de date
             date_str = None
             for field in date_fields:
                 if field in evt and evt[field]:
                     date_str = str(evt[field])
                     break
             
+            # Si on a une date, vérifier que c'est 2026+
             if date_str:
+                # Extraire l'année: "2026-04-15..." → "2026"
                 year = int(date_str[:4])
                 if year >= min_year:
+                    # C'est bon! On le garde
                     filtered.append(evt)
         except Exception as e:
+            # Si une erreur d'extraction de date, juste passer
             logger.debug(f"Erreur extraction date event {i}: {e}")
             pass
     
