@@ -46,6 +46,9 @@ vectors/metadata.jsonl
 vectors/*.bak
 *.bak
 
+# Conversation files (user data, keep local only)
+data/conversations/*.json
+
 # Environment
 .env
 .env.local
