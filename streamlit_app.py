@@ -553,28 +553,82 @@ with tab_docs:
     st.header("📚 Documentation API")
     
     st.write("""
-    ## Endpoints disponibles
+    ## 🎯 Endpoints disponibles
     
-    ### 1. **GET /health**
-    Vérifie l'état de santé de l'API.
+    L'API expose 10 endpoints pour gérer les requêtes RAG et les conversations.
     
-    ```bash
-    curl http://api:8000/health
-    ```
+    ---
     
-    ### 2. **POST /ask**
-    Poser une question au système RAG.
+    ### 🏗️ Endpoints d'état
     
+    #### 1. **GET /**
+    Endpoint racine - retourne le statut global de l'API.
+    
+    **Réponse:**
     ```json
     {
-        "question": "Quels sont les événements à Paris ?",
+        "status": "operational",
+        "index_exists": true,
+        "message": "API Puls-Events RAG opérationnelle"
+    }
+    ```
+    
+    #### 2. **GET /health**
+    Vérification de l'état de santé (health check) pour les conteneurs.
+    
+    **Usage:** Déploiement Docker/Kubernetes
+    
+    **Réponse:**
+    ```json
+    {
+        "status": "healthy",
+        "index_exists": true,
+        "message": "✓ API en bonne santé"
+    }
+    ```
+    
+    ---
+    
+    ### 🔍 Endpoints RAG (Requête unique)
+    
+    #### 3. **POST /ask**
+    Poser une question au système RAG - obtient une réponse générée par Mistral avec sources.
+    
+    **Body:**
+    ```json
+    {
+        "question": "Quels concerts jazz à Paris cette semaine ?",
         "top_k": 3
     }
     ```
     
-    ### 3. **POST /search**
-    Recherche de similarité sur l'index FAISS.
+    **Réponse:**
+    ```json
+    {
+        "question": "...",
+        "answer": "Voici les événements trouvés...",
+        "sources": [
+            {
+                "content": "...",
+                "metadata": {
+                    "title": "...",
+                    "date": "...",
+                    "location": "..."
+                }
+            }
+        ],
+        "timestamp": "2026-04-12T10:30:00"
+    }
+    ```
     
+    **Paramètres:**
+    - `question` (str): Question sur les événements
+    - `top_k` (int): Nombre de sources à retourner (défaut: 3)
+    
+    #### 4. **POST /search**
+    Recherche de similarité pure dans l'index FAISS (sans génération LLM).
+    
+    **Body:**
     ```json
     {
         "question": "Concerts jazz",
@@ -582,19 +636,138 @@ with tab_docs:
     }
     ```
     
-    ### 4. **POST /rebuild**
-    Lance la reconstruction asynchrone de l'index.
+    **Réponse:** Liste de documents similaires avec scores.
     
+    **Utilisation:** Pour explorer l'index sans appel à Mistral.
+    
+    ---
+    
+    ### 🔄 Endpoints d'administration
+    
+    #### 5. **POST /rebuild**
+    Lance la reconstruction asynchrone de l'index FAISS.
+    
+    **Note:** Fonctionne en arrière-plan (non-bloquant).
+    
+    **Réponse:**
+    ```json
+    {
+        "status": "queued",
+        "index_exists": false,
+        "message": "Reconstruction de l'index en cours (background)..."
+    }
+    ```
+    
+    **Quand l'utiliser:**
+    - Après l'ajout de nouvelles données OpenAgenda
+    - Pour actualiser les vecteurs
+    
+    ---
+    
+    ### 💬 Endpoints Chatbot (Conversationnel)
+    
+    #### 6. **POST /chat/start**
+    Démarre une nouvelle conversation (avec historique).
+    
+    **Body:**
+    ```json
+    {
+        "initial_message": "Coucou !"
+    }
+    ```
+    
+    **Réponse:**
+    ```json
+    {
+        "conversation_id": "conv_xyz123",
+        "created_at": "2026-04-12T10:30:00",
+        "message": "Conversation créée (ID: conv_xyz123)..."
+    }
+    ```
+    
+    **Retourne:** Un `conversation_id` à utiliser pour les messages suivants.
+    
+    #### 7. **POST /chat/message**
+    Envoie un message dans une conversation existante.
+    
+    **Body:**
+    ```json
+    {
+        "conversation_id": "conv_xyz123",
+        "message": "Quels spectacles ce weekend ?"
+    }
+    ```
+    
+    **Réponse:**
+    ```json
+    {
+        "conversation_id": "conv_xyz123",
+        "user_message": "Quels spectacles ce weekend ?",
+        "assistant_response": "Voici les spectacles...",
+        "timestamp": "2026-04-12T10:35:00",
+        "messages_count": 4
+    }
+    ```
+    
+    **À savoir:**
+    - L'API maintient l'historique des messages
+    - Mistral reçoit le contexte des messages précédents
+    - Les événements FAISS sont trouvés pour chaque message
+    
+    #### 8. **GET /chat/history/{conversation_id}**
+    Récupère l'historique complet d'une conversation.
+    
+    **Exemple:**
     ```bash
-    curl -X POST http://api:8000/rebuild
+    GET /chat/history/conv_xyz123
     ```
     
-    ### 5. **GET /docs**
-    Accédez à la documentation Swagger interactive.
+    **Réponse:**
+    ```json
+    {
+        "conversation_id": "conv_xyz123",
+        "created_at": "2026-04-12T10:30:00",
+        "messages": [
+            {"role": "user", "content": "Coucou !", "timestamp": "..."},
+            {"role": "assistant", "content": "Bonjour!", "timestamp": "..."}
+        ]
+    }
+    ```
     
+    #### 9. **GET /chat/list**
+    Liste toutes les conversations en cours.
+    
+    **Réponse:**
+    ```json
+    {
+        "conversations": [
+            {"conversation_id": "conv_xyz123", "created_at": "...", "message_count": 4},
+            {"conversation_id": "conv_abc456", "created_at": "...", "message_count": 2}
+        ],
+        "total": 2
+    }
     ```
-    http://api:8000/docs
+    
+    #### 10. **DELETE /chat/{conversation_id}**
+    Supprime une conversation et son historique.
+    
+    **Exemple:**
+    ```bash
+    DELETE /chat/conv_xyz123
     ```
+    
+    **Réponse:**
+    ```json
+    {
+        "message": "Conversation supprimée"
+    }
+    ```
+    
+    ---
+    
+    ### 📖 Documentation interactive
+    
+    Pour explorer l'API en détail avec Swagger UI:
     """)
     
     st.subheader("🔗 Liens utiles")
@@ -616,6 +789,27 @@ with tab_docs:
                 st.json(response.json())
             except Exception as e:
                 st.error(f"Erreur: {e}")
+    
+    st.divider()
+    
+    st.subheader("📊 Résumé des endpoints")
+    
+    endpoints_summary = """
+    | Endpoint | Méthode | Usage | Bloquant |
+    |----------|---------|-------|----------|
+    | `/` | GET | État API | ✓ |
+    | `/health` | GET | Health check | ✓ |
+    | `/ask` | POST | RAG (requête unique) | ✓ |
+    | `/search` | POST | Recherche FAISS pure | ✓ |
+    | `/rebuild` | POST | Reconstruire index | ✗ (async) |
+    | `/chat/start` | POST | Démarrer conversation | ✓ |
+    | `/chat/message` | POST | Envoyer message | ✓ |
+    | `/chat/history/{id}` | GET | Historique conversation | ✓ |
+    | `/chat/list` | GET | Lister conversations | ✓ |
+    | `/chat/{id}` | DELETE | Supprimer conversation | ✓ |
+    """
+    
+    st.markdown(endpoints_summary)
 
 # ============================================================================
 # PIED DE PAGE
