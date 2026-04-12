@@ -1,0 +1,8 @@
+# Documentation - Exclure du versioning
+*
+!.gitkeep
+!ORALV3.md
+!ORAL_SCRIPT_V2.md
+!HOWTO_PRESENTATION.md
+!PRESENTATION_QUICKSTART.md
+!generate_slides_v2.py
