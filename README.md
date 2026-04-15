@@ -175,7 +175,6 @@ PROJET09/
 
 ```env
 MISTRAL_API_KEY=your_key
-OPENAGENDA_API_KEY=your_key
 LOG_LEVEL=INFO
 DEBUG=false
 ```
@@ -239,22 +238,11 @@ View build status: [![Tests CI Badge](https://github.com/USERNAME/PROJET09/actio
 - [ ] Setup logging aggregation
 - [ ] Use secrets manager for API keys
 
-## 📚 Documentation
+## 📚 Purge des évènements passé
 
 Quick reference and detailed guides available in `doc/`:
 
-| File | Purpose |
-|------|---------|
-| `CLEAN_OLD_EVENTS_GUIDE.md` | Complete guide for index cleanup |
-| `COMMANDS.md` | Copy-paste ready commands |
-| `CHEAT_SHEET.md` | Quick reference card |
-| `README_AGENT.txt` | Agent creation summary |
-
-Start with: [doc/COMMANDS.md](doc/COMMANDS.md)
-
-## 🤖 AI Agents
-
-See `.github/copilot-instructions.md` for AI agent guidance on this project.
+docker exec -it puls-events-api python scripts/clean_index_robust.py
 
 ## 📝 Notes
 
