@@ -41,9 +41,8 @@ DATAIN/*.doc
 DATAIN/*.xlsx
 
 # Vector files (large)
-vectors/index.faiss
-vectors/metadata.jsonl
-vectors/*.bak
+vectors/*
+!vectors/.gitkeep
 *.bak
 
 # Conversation files (user data, keep local only)

@@ -1,0 +1,71 @@
+# ============================================================
+# Exemples de requêtes curl pour tester l'API Puls-Events
+# Base URL : http://localhost:8000
+# ============================================================
+
+# ---------- GET / (statut) ----------
+curl http://localhost:8000/
+
+# ---------- GET /health ----------
+curl http://localhost:8000/health
+
+# ---------- POST /ask (question RAG) ----------
+curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" -d "{\"question\": \"Quels concerts de rock la semaine prochaine ?\", \"top_k\": 3}"
+
+curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" -d "{\"question\": \"Y a-t-il des festivals de jazz en mai 2026 ?\", \"top_k\": 5}"
+
+curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" -d "{\"question\": \"Spectacles pour enfants ce week-end\", \"top_k\": 3}"
+
+# ---------- POST /search (recherche similarité) ----------
+curl -X POST http://localhost:8000/search -H "Content-Type: application/json" -d "{\"question\": \"exposition art contemporain\", \"top_k\": 5}"
+
+curl -X POST http://localhost:8000/search -H "Content-Type: application/json" -d "{\"question\": \"theatre paris\", \"top_k\": 3}"
+
+# ---------- POST /rebuild (reconstruction index) ----------
+curl -X POST http://localhost:8000/rebuild
+
+# ---------- POST /chat/start (démarrer conversation) ----------
+curl -X POST http://localhost:8000/chat/start -H "Content-Type: application/json" -d "{\"initial_message\": \"Bonjour, je cherche des concerts\"}"
+
+curl -X POST http://localhost:8000/chat/start -H "Content-Type: application/json" -d "{}"
+
+# ---------- POST /chat/message (envoyer message) ----------
+# Remplacer CONVERSATION_ID par l'id retourné par /chat/start
+curl -X POST http://localhost:8000/chat/message -H "Content-Type: application/json" -d "{\"conversation_id\": \"CONVERSATION_ID\", \"message\": \"Quels concerts de rock à Paris ?\"}"
+
+curl -X POST http://localhost:8000/chat/message -H "Content-Type: application/json" -d "{\"conversation_id\": \"CONVERSATION_ID\", \"message\": \"Et pour le jazz ?\"}"
+
+# ---------- GET /chat/history/{id} ----------
+curl http://localhost:8000/chat/history/CONVERSATION_ID
+
+# ---------- GET /chat/list ----------
+curl http://localhost:8000/chat/list
+
+# ---------- DELETE /chat/{id} ----------
+curl -X DELETE http://localhost:8000/chat/CONVERSATION_ID
+
+
+# ============================================================
+# Payloads JSON bruts (copier-coller dans Swagger /docs)
+# ============================================================
+
+# /ask
+{"question": "Quels concerts de rock la semaine prochaine ?", "top_k": 3}
+{"question": "Y a-t-il des festivals de jazz en mai 2026 ?", "top_k": 5}
+{"question": "Spectacles pour enfants ce week-end", "top_k": 3}
+{"question": "Evenements gratuits demain", "top_k": 3}
+{"question": "Marché de producteurs locaux", "top_k": 3}
+
+# /search
+{"question": "exposition art contemporain", "top_k": 5}
+{"question": "theatre paris", "top_k": 3}
+{"question": "musique classique", "top_k": 3}
+
+# /chat/start
+{"initial_message": "Bonjour, je cherche des concerts"}
+{}
+
+# /chat/message
+{"conversation_id": "CONVERSATION_ID", "message": "Quels concerts de rock à Paris ?"}
+{"conversation_id": "CONVERSATION_ID", "message": "Et pour le jazz ?"}
+{"conversation_id": "CONVERSATION_ID", "message": "Merci, et demain soir ?"}

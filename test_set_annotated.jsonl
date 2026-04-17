@@ -1,0 +1,14 @@
+# Jeu de test annoté pour évaluation RAG
+# Format: JSONL (une ligne = un test)
+# Utilisé pour mesurer la qualité des réponses générées
+
+{"question": "Quels événements culturels à Paris en avril 2026 ?", "expected_keywords": ["Paris", "avril", "événement", "culture"], "expected_type": "search", "min_sources": 1}
+{"question": "Concerts jazz cette semaine", "expected_keywords": ["concert", "jazz", "semaine"], "expected_type": "search", "min_sources": 1}
+{"question": "Musées ouverts dimanche à Lyon", "expected_keywords": ["musée", "dimanche", "Lyon"], "expected_type": "search", "min_sources": 1}
+{"question": "Exposition photo gratuite", "expected_keywords": ["exposition", "photo", "gratuit"], "expected_type": "search", "min_sources": 1}
+{"question": "Théâtre pour enfants ce week-end", "expected_keywords": ["théâtre", "enfant", "week-end"], "expected_type": "search", "min_sources": 1}
+{"question": "Festivals d'été 2026", "expected_keywords": ["festival", "été", "2026"], "expected_type": "search", "min_sources": 1}
+{"question": "Événements gratuits proche de moi", "expected_keywords": ["gratuit", "proche", "événement"], "expected_type": "search", "min_sources": 1}
+{"question": "Cinéma en plein air Paris", "expected_keywords": ["cinéma", "plein air", "Paris"], "expected_type": "search", "min_sources": 1}
+{"question": "Conférences technologie avril", "expected_keywords": ["conférence", "technologie", "avril"], "expected_type": "search", "min_sources": 1}
+{"question": "Événements pour familles ce mois-ci", "expected_keywords": ["famille", "événement", "mois"], "expected_type": "search", "min_sources": 1}

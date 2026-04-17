@@ -201,19 +201,11 @@ def load_metadata() -> list:
 
 
 def get_embedding_model():
-    """Retourne le modèle d'embedding (singleton avec cache)."""
-    global _embedding_model
-    if _embedding_model is None:
-        try:
-            from langchain.embeddings import HuggingFaceEmbeddings
-            logger.info("Initialisation du modèle d'embedding HuggingFace...")
-            _embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-            logger.info("✓ Modèle d'embedding chargé")
-        except Exception as e:
-            logger.warning(f"HuggingFace embeddings non disponible: {e}")
-            _embedding_model = "error"
-    
-    return _embedding_model if _embedding_model != "error" else None
+    """Retourne le modèle d'embedding (singleton avec cache).
+    Non utilisé directement — les embeddings passent par embed_text() via Mistral API.
+    Conservé pour compatibilité.
+    """
+    return None
 
 
 def get_faiss_index():
@@ -238,26 +230,38 @@ def get_faiss_index():
         return None, None
 
 
+# Dimension des embeddings Mistral (modèle mistral-embed)
+EMBEDDING_DIM = 1024
+
+
 def embed_text(text: str) -> np.ndarray:
-    """Vectorise un texte (768D pour matcher l'index FAISS)."""
+    """Vectorise un texte via l'API Mistral embeddings (1024D)."""
+    import requests as _requests
     try:
-        model = get_embedding_model()
-        if model is None:
-            # Fallback: vecteur aléatoire (shape: 1, 768 pour matcher build_index.py)
-            logger.debug("Utilisation d'embeddings aléatoires 768D")
-            return np.random.rand(1, 768).astype("float32")
-        
-        # Vectoriser avec HuggingFace (retourne 384D, pad à 768D)
-        embedding = model.embed_query(text)
-        # Pad embedding to 768D to match FAISS index
-        if len(embedding) < 768:
-            embedding = embedding + [0] * (768 - len(embedding))
-        elif len(embedding) > 768:
-            embedding = embedding[:768]
+        api_key = os.environ.get("MISTRAL_API_KEY")
+        if not api_key:
+            logger.error("MISTRAL_API_KEY non définie — embeddings impossibles")
+            return np.zeros((1, EMBEDDING_DIM), dtype="float32")
+
+        resp = _requests.post(
+            "https://api.mistral.ai/v1/embeddings",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={"model": "mistral-embed", "input": [text]},
+            timeout=15,
+        )
+
+        if resp.status_code != 200:
+            logger.error(f"Mistral embeddings {resp.status_code}: {resp.text[:200]}")
+            return np.zeros((1, EMBEDDING_DIM), dtype="float32")
+
+        embedding = resp.json()["data"][0]["embedding"]
         return np.array([embedding], dtype="float32")
     except Exception as e:
-        logger.error(f"Erreur embedding: {e}")
-        return np.random.rand(1, 768).astype("float32")
+        logger.error(f"Erreur embedding Mistral: {e}")
+        return np.zeros((1, EMBEDDING_DIM), dtype="float32")
 
 
 def is_event_valid(metadata: dict) -> bool:

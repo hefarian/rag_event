@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 VECTORS_DIR = pathlib.Path("vectors")
 VECTORS_DIR.mkdir(exist_ok=True)
 
-# Fichier de données source
+# Fichier de données source (2026+ = filtré, plus léger que le fichier complet)
 DATAIN_DIR = pathlib.Path("DATAIN")
-DEFAULT_DATA_PATH = DATAIN_DIR / "evenements-publics-openagenda.json"
+DEFAULT_DATA_PATH = DATAIN_DIR / "evenements-2026plus.json"
 
 
 def load_events(path: str = None) -> List[Dict[str, Any]]:
@@ -202,47 +202,73 @@ def embed_texts(texts: List[str]) -> np.ndarray:
         texts: Liste des textes à vectoriser ("Jazz Night", "Concert...", etc.)
     
     Returns:
-        Matrice numpy de vecteurs (shape: len(texts) x 768)
+        Matrice numpy de vecteurs (shape: len(texts) x 1024)
     """
-    try:
-        # Essayer d'utiliser Mistral pour générer les embeddings
-        from mistral import MistralClient
-        api_key = os.environ.get("MISTRAL_API_KEY")
-        
-        if not api_key:
-            logger.warning("MISTRAL_API_KEY non définie. Utilisation de vecteurs aléatoires.")
-            raise ValueError("No API key")
-        
-        logger.info("Utilisation de Mistral pour les embeddings...")
-        mc = MistralClient(api_key=api_key)
-        
-        # Générer un embedding pour chaque texte
-        embs = []
-        for i, text in enumerate(texts):
-            # Afficher la progression tous les 100 textes
-            if i % 100 == 0:
-                logger.info(f"  Embedding {i}/{len(texts)}...")
+    import requests
+    import time
+
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    if not api_key:
+        logger.error("MISTRAL_API_KEY non définie — impossible de générer de vrais embeddings.")
+        raise ValueError("MISTRAL_API_KEY is required for building the index")
+
+    logger.info("Utilisation de Mistral API pour les embeddings...")
+    dim = 1024  # Dimension du modèle mistral-embed
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    all_embeddings = []
+    batch_size = 25  # Mistral supporte le batching
+    max_retries = 5
+
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        if i % 500 == 0:
+            logger.info(f"  Embedding {i}/{len(texts)}...")
+
+        # Retry avec backoff exponentiel
+        for attempt in range(max_retries):
             try:
-                # Appeler Mistral API pour générer le vecteur
-                emb = mc.embed(text)
-                embs.append(emb)
+                resp = requests.post(
+                    "https://api.mistral.ai/v1/embeddings",
+                    headers=headers,
+                    json={"model": "mistral-embed", "input": batch},
+                    timeout=30,
+                )
+                if resp.status_code == 429:
+                    wait = min(2 ** attempt * 2, 60)
+                    logger.warning(f"  Rate limited, attente {wait}s (tentative {attempt+1}/{max_retries})...")
+                    time.sleep(wait)
+                    continue
+                if resp.status_code != 200:
+                    logger.error(f"Mistral embeddings {resp.status_code}: {resp.text[:200]}")
+                    for _ in batch:
+                        all_embeddings.append(np.zeros(dim, dtype="float32"))
+                    break
+
+                data = resp.json()["data"]
+                for item in sorted(data, key=lambda x: x["index"]):
+                    all_embeddings.append(np.array(item["embedding"], dtype="float32"))
+                break  # Succès, sortir de la boucle retry
             except Exception as e:
-                logger.warning(f"  Erreur embedding texte {i}: {e}")
-                # Si Mistral échoue pour ce texte, utiliser un vecteur aléatoire
-                embs.append(np.random.rand(768).astype("float32"))
-        
-        return np.array(embs, dtype="float32")
-    
-    except Exception as e:
-        # Fallback: Mistral indisponible, utiliser vecteurs aléatoires
-        logger.info(f"Mistral non disponible ({e}). Utilisation de vecteurs aléatoires...")
-        
-        # Dimension standard des embeddings (768 = taille standard Mistral)
-        dim = 768
-        # RNG = Random Number Generator avec seed fixe pour reproductibilité
-        rng = np.random.RandomState(42)
-        # Générer len(texts) vecteurs aléatoires de dimension 768
-        return rng.rand(len(texts), dim).astype("float32")
+                logger.warning(f"  Erreur batch {i} tentative {attempt+1}: {e}")
+                if attempt == max_retries - 1:
+                    for _ in batch:
+                        all_embeddings.append(np.zeros(dim, dtype="float32"))
+                else:
+                    time.sleep(2 ** attempt)
+        else:
+            # Toutes les tentatives échouées (rate limit persistant)
+            logger.error(f"  Batch {i} échoué après {max_retries} tentatives")
+            for _ in batch:
+                all_embeddings.append(np.zeros(dim, dtype="float32"))
+
+        # Pause entre les batches pour respecter le rate limit
+        time.sleep(0.3)
+
+    return np.array(all_embeddings, dtype="float32")
 
 
 def build_index(
@@ -409,7 +435,7 @@ if __name__ == "__main__":
         start_time = datetime.now()
         num_vectors = build_index(
             data_path=str(DEFAULT_DATA_PATH),
-            max_events=50000,  # Limiter à 50k pour POC (évite OOM + assez events)
+            max_events=10000,  # 10k events pour build raisonnable via API Mistral
         )
         elapsed = (datetime.now() - start_time).total_seconds()
         logger.info(f"Temps d'exécution: {elapsed:.2f}s")
